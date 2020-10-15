@@ -406,6 +406,15 @@ a {
     background-repeat: no-repeat;
     background-size: auto 75%;
   }
+
+  #tool-font-settings {
+    background-image: url('../../assets/img/icons/font.svg');
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: auto 75%;
+    bottom: 100px;
+    position: fixed;
+  }
 }
 
 .lock-screen-message {
