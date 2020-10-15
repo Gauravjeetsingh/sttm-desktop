@@ -1,8 +1,9 @@
 import { React } from 'react';
-import updateRangeSetting from './update-range-setting';
+// import updateRangeSetting from './update-range-setting';
+
 const { remote } = require('electron');
 
-const { store } = remote.require('./app');
+const { store, i18n } = remote.require('./app');
 
 const defaultPrefs = store.getDefaults().userPrefs;
 const userPrefs = store.getAllPrefs();
@@ -20,7 +21,7 @@ const rangeSettingInit = (setting, catKey, settingKey) => {
         const newVal = e.target.value;
         e.target.dataset.value = newVal;
         store.setUserPref(`${catKey}.${settingKey}.${optionKey}`, newVal);
-        updateRangeSetting(`${catKey}.settings.${settingKey}.options.${optionKey}`, newVal);
+        // updateRangeSetting(`${catKey}.settings.${settingKey}.options.${optionKey}`, newVal);
       },
       step: option.step,
       type: 'range',
@@ -32,7 +33,7 @@ const rangeSettingInit = (setting, catKey, settingKey) => {
         <i>{`(${i18n.t('SETTINGS.DEFAULT')}: ${defaultPrefs[catKey][settingKey][optionKey]})`}</i>
         <div className="range">
           <input id={optionId} {...switchListAttrs}></input>
-          <label for={optionId}></label>
+          <label htmlFor={optionId}></label>
         </div>
       </li>
     );
