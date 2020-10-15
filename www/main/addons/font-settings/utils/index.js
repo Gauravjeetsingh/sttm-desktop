@@ -1,1 +1,1 @@
-export { default as rangeSettingInit } from './range-setting-init.js';
+export { default as rangeSettingInit } from './range-setting-init';
