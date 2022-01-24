@@ -278,6 +278,8 @@ const ShabadContent = () => {
     } else {
       loadShabad(activeShabadId, initialVerseId).then(verses => {
         if (verses) {
+          console.log('this works and heres the initial verse');
+          console.log(initialVerseId);
           saveToHistory(verses, 'shabad', initialVerseId);
           setActiveShabad(verses);
           if (isRandomShabad) {
