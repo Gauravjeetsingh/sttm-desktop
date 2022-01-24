@@ -281,10 +281,14 @@ const ShabadContent = () => {
           console.log('this works and heres the initial verse');
           console.log(initialVerseId);
           console.log(verses);
-          saveToHistory(verses, 'shabad', initialVerseId);
-          setActiveShabad(verses);
-          if (isRandomShabad) {
+          console.log(verses[0].ID);
+          if (initialVerseId) {
+            saveToHistory(verses, 'shabad', initialVerseId);
+          } else {
             saveToHistory(verses, 'shabad', verses[0].ID);
+          }
+          setActiveShabad(verses[0].ID);
+          if (isRandomShabad) {
             openFirstVerse(verses[0].ID);
             setIsRandomShabad(false);
           }
