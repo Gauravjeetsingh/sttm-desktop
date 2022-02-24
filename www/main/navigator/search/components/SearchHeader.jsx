@@ -137,6 +137,7 @@ function SearchHeader() {
                       type="radio"
                       value={value}
                       checked={true}
+                      readOnly={true}
                       disabled={true}
                     />
                     <span className="search-type-checkmark"></span>

@@ -10,8 +10,11 @@ const createUserSettingsState = (settingsSchema, savedSettings, userConfigPath) 
     const stateVarName = convertToCamelCase(settingKey);
     const stateFuncName = `set${convertToCamelCase(settingKey, true)}`;
 
-    userSettingsState[stateVarName] =
-      savedSettings[settingKey] || settingsSchema[settingKey].initialValue;
+    if (Object.keys(savedSettings).includes(settingKey)) {
+      userSettingsState[stateVarName] = savedSettings[settingKey];
+    } else {
+      userSettingsState[stateVarName] = settingsSchema[settingKey].initialValue;
+    }
 
     userSettingsState[stateFuncName] = action((state, payload) => {
       const oldValue = state[stateVarName];
