@@ -1,6 +1,5 @@
 const remote = require('@electron/remote');
 
-const { store } = remote.require('./app');
 const analytics = remote.getGlobal('analytics');
 
 export const setDefaultBg = (themeInstance, setThemeBg, themeBg) => {
@@ -21,17 +20,14 @@ export const applyTheme = (themeInstance, isCustom, setTheme, setThemeBg, themeB
   if (!isCustom) {
     setTheme(themeInstance.key);
     setDefaultBg(themeInstance, setThemeBg, themeBg);
-    /* TODO: move this to react state when porting viewer to react */
-    store.setUserPref('app.themebg', themeBgObj);
   } else {
     const themeBgObj = {
       type: 'custom',
       url: themeInstance['background-image'],
     };
-    if(themeBg !== themeBgObj) {
+    if (themeBg !== themeBgObj) {
       setThemeBg(themeBgObj);
     }
-    store.setUserPref('app.themebg', themeBgObj);
   }
   global.core.platformMethod('updateSettings');
   analytics.trackEvent('theme', themeInstance.key);
