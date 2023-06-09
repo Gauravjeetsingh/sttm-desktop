@@ -70,7 +70,7 @@ const Setting = ({ settingObj, stateVar, stateFunction }) => {
           className={`control-item-switch-${title}`}
           value={userSettings[stateVar]}
           onToggle={handleInputChange}
-          disabled={userSettings[settingObj.disableWhen]}
+          disabled={userSettings[convertToCamelCase(settingObj.disableWhen)]}
         />
       );
       break;
