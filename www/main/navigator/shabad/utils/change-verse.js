@@ -97,7 +97,7 @@ export const sendToBaniController = (
     paneAttributes,
   },
 ) => {
-  if (window.socket !== undefined && window.socket !== null) {
+  if (window.socket !== undefined && window.socket !== null && activeShabadId !== null) {
     let baniVerse;
     if (!crossPlatformId) {
       baniVerse = activeShabad.find((obj) => obj.ID === newTraversedVerse);
