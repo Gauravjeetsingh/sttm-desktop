@@ -61,8 +61,7 @@ jobs:
           python3 -m venv venv
           source venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel
-          npm config set python "${PWD}/venv/bin/python"
-
+          export npm_config_python="${PWD}/venv/bin/python"
 
       # 4. Set up Node (use your preferred version)
       - name: Use Node.js 18.18.0
