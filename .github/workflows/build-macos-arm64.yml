@@ -49,15 +49,20 @@ jobs:
           # Remove the p12 from the filesystem (optional cleanup)
           rm certificate.p12
 
-      # Add this step to install python & distutils
-      - name: Install Python + distutils
+      - name: Install Python
         run: |
           brew update
           brew install python@3.10
           echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> ~/.bashrc
           source ~/.bashrc
 
-          python3 -m pip install --upgrade pip setuptools wheel
+      - name: Create & activate local venv
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          python -m pip install --upgrade pip setuptools wheel
+          npm config set python "${PWD}/venv/bin/python"
+
 
       # 4. Set up Node (use your preferred version)
       - name: Use Node.js 18.18.0
@@ -67,7 +72,9 @@ jobs:
 
       # 5. Install dependencies
       - name: Install dependencies
-        run: npm ci
+        run: |
+          source venv/bin/activate
+          npm ci
 
       # 6. Build/compile the app if needed
       - name: Build the application
