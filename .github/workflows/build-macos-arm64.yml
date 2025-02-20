@@ -87,7 +87,7 @@ jobs:
       # 7. Package (and sign/notarize) for macOS arm64
       - name: Package Electron App for macOS (ARM64)
         run: |
-          npx electron-builder --mac universal --publish never
+          npx electron-builder --mac --universal --publish never
           # Use --mac universal for a universal binary (Intel + ARM),
           # but it builds a bigger file and takes longer.
 
