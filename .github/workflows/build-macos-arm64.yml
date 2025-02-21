@@ -55,11 +55,6 @@ jobs:
           brew install python@3.10
           echo 'export PATH="/usr/local/opt/python@3.10/bin:$PATH"' >> ~/.bashrc
           source ~/.bashrc
-
-      - name: Install native deps for sharp/mdns
-        run: |
-          brew install vips
-          brew install pkg-config autoconf automake libtool
           
       - name: Create & activate local venv
         run: |
