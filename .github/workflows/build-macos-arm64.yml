@@ -57,7 +57,9 @@ jobs:
           
       - name: Create & activate local venv
         run: |
-          python3 -m venv venv
+          brew install pyenv
+          pyenv install 3.12.3
+          python3.12 -m venv venv
           source venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel
           export npm_config_python="${PWD}/venv/bin/python"
