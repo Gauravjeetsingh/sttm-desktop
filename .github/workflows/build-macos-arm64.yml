@@ -76,14 +76,7 @@ jobs:
 
       # 6. Build/compile the app if needed
       - name: Build the application
-        run: npm run build
-
-      # 7. Package (and sign/notarize) for macOS arm64
-      - name: Package Electron App for macOS (ARM64)
-        run: |
-          npx electron-builder --mac --publish never
-          # Use --mac universal for a universal binary (Intel + ARM),
-          # but it builds a bigger file and takes longer.
+        run: npm run dist:macArm
 
       # 8. Upload the DMG/ZIP (or .pkg) artifacts
       - name: Upload artifacts
