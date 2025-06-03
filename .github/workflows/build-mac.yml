@@ -225,28 +225,41 @@ jobs:
       - name: Upload to Azure Storage
         run: |
           source venv-gyp/bin/activate
-          VERSION=$(node -p "require('./package.json').version")
-          BRANCH=${GITHUB_REF_NAME}
-          
-          if [ "$BRANCH" = "dev" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}-alpha.dmg"
-          elif [ "$BRANCH" = "master" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}-beta.dmg"
-          elif [ "$BRANCH" = "release" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}.dmg"
-          else
-            DMG_FILE="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
-          fi
-
           # Install Azure CLI
           brew install azure-cli
 
+          # Function to get next available filename
+          get_next_filename() {
+            local base_name="$1"
+            local counter=1
+            local new_name="${base_name%.dmg}.${counter}.dmg"
+            
+            # Check if file exists and increment counter until we find an available name
+            while az storage blob exists \
+              --account-name "${{ secrets.AZURE_STORAGE_ACCOUNT }}" \
+              --container-name "${{ secrets.AZURE_STORAGE_CONTAINER }}" \
+              --name "macos/$new_name" \
+              --sas-token "${{ secrets.SAS_TOKEN }}" | grep -q "true"; do
+              counter=$((counter + 1))
+              new_name="${base_name%.dmg}.${counter}.dmg"
+            done
+            echo "$new_name"
+          }
+
+          # Get the original filename
+          original_name="${{ steps.dmg-name.outputs.dmg_name }}"
+          
+          # Get next available filename
+          new_name=$(get_next_filename "$original_name")
+          
+          echo "Uploading as: $new_name"
+          
           # Upload the DMG to Azure Storage using SAS token
           az storage blob upload \
             --account-name "${{ secrets.AZURE_STORAGE_ACCOUNT }}" \
             --container-name "${{ secrets.AZURE_STORAGE_CONTAINER }}" \
-            --name "macos/${DMG_FILE}" \
-            --file "${DMG_FILE}" \
+            --name "macos/$new_name" \
+            --file "${{ steps.dmg-name.outputs.dmg_name }}" \
             --sas-token "${{ secrets.SAS_TOKEN }}"
 
       - name: Cleanup build files
