@@ -10,10 +10,6 @@ executors:
 jobs:
   build-mac:
     executor: macos-exec
-    environment:
-      CSC_LINK: ${{ secrets.CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - checkout
 
@@ -79,7 +75,7 @@ jobs:
             else
               echo "CSC_LINK is set and not empty"
               # Print first few characters to verify it's not just whitespace
-              echo "CSC_LINK starts with: ${CSC_LINK:0:10}..."
+              echo "CSC_LINK starts with: ${CSC_LINK:0:9}..."
             fi
 
             # download the certificate - handle URL encoding
