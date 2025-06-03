@@ -64,9 +64,24 @@ jobs:
             # add team id to package.json
             npm run prebuild
 
+            # Debug CSC_LINK
+            if [ -z "${CSC_LINK}" ]; then
+              echo "CSC_LINK is empty!"
+              echo "Checking if secret exists..."
+              if [ -n "${CSC_LINK+x}" ]; then
+                echo "CSC_LINK is set but empty"
+              else
+                echo "CSC_LINK is not set at all"
+              fi
+              exit 1
+            else
+              echo "CSC_LINK is set and not empty"
+              # Print first few characters to verify it's not just whitespace
+              echo "CSC_LINK starts with: ${CSC_LINK:0:10}..."
+            fi
+
             # download the certificate - handle URL encoding
             echo "Downloading certificate..."
-            echo "CSC_LINK value: ${CSC_LINK}"
             
             # Decode the URL if it's base64 encoded
             if [[ "${CSC_LINK}" == *"base64"* ]]; then
