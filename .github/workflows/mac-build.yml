@@ -1,0 +1,202 @@
+name: Build macOS App
+
+on:
+  push:
+    branches:
+      - dev
+      - master
+      - release
+      - circleci-gaurav
+
+jobs:
+  build-mac:
+    runs-on: macos-14
+    env:
+      KEY_CHAIN: build.keychain
+      CERTIFICATE_P12: certificate.p12
+      IDENTITY: "Developer ID Application: Khalis, Inc."
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.18.0'
+
+      - name: Install dependencies
+        run: |
+          npm install
+
+      - name: Ensure Python distutils support
+        run: |
+          brew install python-setuptools
+          python3 -m pip install --upgrade setuptools
+
+      - name: Import Code Signing Certificate
+        run: |
+          # Debug CSC_LINK
+          if [ -z "${{ secrets.CSC_LINK }}" ]; then
+            echo "CSC_LINK is empty!"
+            echo "Checking if secret exists..."
+            if [ -n "${{ secrets.CSC_LINK }}" ]; then
+              echo "CSC_LINK is set but empty"
+            else
+              echo "CSC_LINK is not set at all"
+            fi
+            exit 1
+          else
+            echo "CSC_LINK is set and not empty"
+            # Print first few characters to verify it's not just whitespace
+            echo "CSC_LINK starts with: ${{ secrets.CSC_LINK }}..."
+          fi
+
+          # add team id to package.json
+          npm run prebuild
+
+          # download the certificate - handle URL encoding
+          echo "Downloading certificate..."
+          
+          # Decode the URL if it's base64 encoded
+          if [[ "${{ secrets.CSC_LINK }}" == *"base64"* ]]; then
+            DECODED_URL=$(echo "${{ secrets.CSC_LINK }}" | base64 --decode)
+            echo "Decoded URL: ${DECODED_URL}"
+            curl -sSL "${DECODED_URL}" -o "${CERTIFICATE_P12}"
+          else
+            curl -sSL "${{ secrets.CSC_LINK }}" -o "${CERTIFICATE_P12}"
+          fi
+
+          # Verify the certificate was downloaded
+          if [ ! -f "${CERTIFICATE_P12}" ]; then
+            echo "Failed to download certificate"
+            exit 1
+          fi
+
+          openssl pkcs12 -in ${CERTIFICATE_P12} -nodes -legacy -passin pass:"${{ secrets.CSC_KEY_PASSWORD }}"
+
+          #create a keychain
+          security create-keychain -p "${{ secrets.CSC_KEY_PASSWORD }}" "${KEY_CHAIN}"
+          security set-keychain-settings -t 3600 -l "${KEY_CHAIN}"
+          security list-keychains -d user -s "${KEY_CHAIN}"
+
+          # Make the keychain the default so identities are found
+          security default-keychain -d user -s "${KEY_CHAIN}"
+          
+          # Unlock the keychain
+          security unlock-keychain -p "${{ secrets.CSC_KEY_PASSWORD }}" "${KEY_CHAIN}"
+
+          security import "${CERTIFICATE_P12}" -k "${KEY_CHAIN}" -P "${{ secrets.CSC_KEY_PASSWORD }}" -T /usr/bin/codesign
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k "${{ secrets.CSC_KEY_PASSWORD }}" "${KEY_CHAIN}"
+
+          npm run pack:macArm
+          rm -fr *.p12
+
+      - name: Get version and set DMG name based on branch
+        id: set-dmg-name
+        run: |
+          set -e
+          VERSION=$(node -p "require('./package.json').version")
+          BRANCH=${GITHUB_REF_NAME}
+          
+          if [ "$BRANCH" = "dev" ]; then
+            DMG_NAME="SikhiToTheMax-${VERSION}-alpha.dmg"
+          elif [ "$BRANCH" = "master" ]; then
+            DMG_NAME="SikhiToTheMax-${VERSION}-beta.dmg"
+          elif [ "$BRANCH" = "release" ]; then
+            DMG_NAME="SikhiToTheMax-${VERSION}.dmg"
+          else
+            DMG_NAME="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
+          fi
+          
+          echo "Building for branch: $BRANCH"
+          echo "Version: $VERSION"
+          echo "DMG will be named: $DMG_NAME"
+          
+          # Find the original DMG and rename it
+          ls builds
+          DMG=$(find builds -name "SikhiToTheMax-*-arm64.dmg" | head -n 1)
+          if [ -z "$DMG" ]; then
+            echo "DMG not found!"
+            exit 1
+          fi
+          echo "Found: $DMG"
+          cp "$DMG" "$DMG_NAME"
+          
+          # Set output for other steps
+          echo "dmg_name=$DMG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Verify and Code sign .dmg Signature
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          BRANCH=${GITHUB_REF_NAME}
+          
+          if [ "$BRANCH" = "dev" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}-alpha.dmg"
+          elif [ "$BRANCH" = "master" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}-beta.dmg"
+          elif [ "$BRANCH" = "release" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}.dmg"
+          else
+            DMG_FILE="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
+          fi
+
+          echo "🔑 Listing all identities in the keychain..."
+          security find-identity -p codesigning -v
+          echo "🔑 Listing all keychains..."
+          security list-keychains -d user
+
+          echo "🔍 Verifying DMG signature..."
+          if ! codesign --verify --deep --strict "$DMG_FILE"; then
+            echo "❌ DMG is not properly signed. Attempting to sign it now... $IDENTITY"
+
+            codesign --sign "$IDENTITY" --timestamp --options runtime "$DMG_FILE"
+
+            echo "✅ Signing completed. Re-verifying..."
+            if codesign --verify --deep --strict "$DMG_FILE"; then
+              echo "🎉 DMG has been successfully signed!"
+            else
+              echo "🚨 Failed to sign DMG properly. Please check codesigning identity and try again."
+              exit 1
+            fi
+          else
+            echo "✅ DMG is already properly signed. No action needed."
+          fi
+
+      - name: Upload to Azure Storage
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          BRANCH=${GITHUB_REF_NAME}
+          
+          if [ "$BRANCH" = "dev" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}-alpha.dmg"
+          elif [ "$BRANCH" = "master" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}-beta.dmg"
+          elif [ "$BRANCH" = "release" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}.dmg"
+          else
+            DMG_FILE="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
+          fi
+
+          # Install Azure CLI
+          brew install azure-cli
+
+          # Upload the DMG to Azure Storage using SAS token
+          az storage blob upload \
+            --account-name "${{ secrets.AZURE_STORAGE_ACCOUNT }}" \
+            --container-name "${{ secrets.AZURE_STORAGE_CONTAINER }}" \
+            --name "macos/${DMG_FILE}" \
+            --file "${DMG_FILE}" \
+            --sas-token "${{ secrets.SAS_TOKEN }}"
+
+      - name: Cleanup build files
+        run: |
+          ls builds
+          echo "Cleaning up build leftovers..."
+          rm -rf builds
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: SikhiToTheMax-*.dmg 
