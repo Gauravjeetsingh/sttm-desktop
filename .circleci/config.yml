@@ -64,8 +64,25 @@ jobs:
             # add team id to package.json
             npm run prebuild
 
-            # download the certificate
-            curl -sSL "${CSC_LINK}" -o "${CERTIFICATE_P12}"
+            # download the certificate - handle URL encoding
+            echo "Downloading certificate..."
+            echo "CSC_LINK value: ${CSC_LINK}"
+            
+            # Decode the URL if it's base64 encoded
+            if [[ "${CSC_LINK}" == *"base64"* ]]; then
+              DECODED_URL=$(echo "${CSC_LINK}" | base64 --decode)
+              echo "Decoded URL: ${DECODED_URL}"
+              curl -sSL "${DECODED_URL}" -o "${CERTIFICATE_P12}"
+            else
+              curl -sSL "${CSC_LINK}" -o "${CERTIFICATE_P12}"
+            fi
+
+            # Verify the certificate was downloaded
+            if [ ! -f "${CERTIFICATE_P12}" ]; then
+              echo "Failed to download certificate"
+              exit 1
+            fi
+
             openssl pkcs12 -in ${CERTIFICATE_P12} -nodes -legacy -passin pass:"${CSC_KEY_PASSWORD}"
 
             #create a keychain
