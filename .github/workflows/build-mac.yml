@@ -16,6 +16,7 @@ jobs:
       CERTIFICATE_P12: certificate.p12
       IDENTITY: "Developer ID Application: Khalis, Inc."
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      DMG_NAME: "" # Global variable for DMG filename
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -47,6 +48,32 @@ jobs:
           source venv-gyp/bin/activate
           brew install python-setuptools
           python3 -m pip install --upgrade setuptools
+
+      - name: Set DMG filename
+        id: dmg-name
+        run: |
+          source venv-gyp/bin/activate
+          VERSION=$(node -p "require('./package.json').version")
+          BRANCH=${GITHUB_REF_NAME}
+          
+          if [ "$BRANCH" = "dev" ]; then
+            DMG_NAME="SikhiToTheMax-${VERSION}-alpha.dmg"
+          elif [ "$BRANCH" = "master" ]; then
+            DMG_NAME="SikhiToTheMax-${VERSION}-beta.dmg"
+          elif [ "$BRANCH" = "release" ]; then
+            DMG_NAME="SikhiToTheMax-${VERSION}.dmg"
+          else
+            DMG_NAME="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
+          fi
+          
+          echo "Building for branch: $BRANCH"
+          echo "Version: $VERSION"
+          echo "DMG will be named: $DMG_NAME"
+          
+          # Set output for other steps
+          echo "dmg_name=$DMG_NAME" >> $GITHUB_OUTPUT
+          # Set global variable
+          echo "DMG_NAME=$DMG_NAME" >> $GITHUB_ENV
 
       - name: Import Code Signing Certificate
         run: |
@@ -108,28 +135,9 @@ jobs:
           npm run pack:macArm
           rm -fr *.p12
 
-      - name: Get version and set DMG name based on branch
-        id: set-dmg-name
+      - name: Rename DMG file
         run: |
           source venv-gyp/bin/activate
-          set -e
-          VERSION=$(node -p "require('./package.json').version")
-          BRANCH=${GITHUB_REF_NAME}
-          
-          if [ "$BRANCH" = "dev" ]; then
-            DMG_NAME="SikhiToTheMax-${VERSION}-alpha.dmg"
-          elif [ "$BRANCH" = "master" ]; then
-            DMG_NAME="SikhiToTheMax-${VERSION}-beta.dmg"
-          elif [ "$BRANCH" = "release" ]; then
-            DMG_NAME="SikhiToTheMax-${VERSION}.dmg"
-          else
-            DMG_NAME="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
-          fi
-          
-          echo "Building for branch: $BRANCH"
-          echo "Version: $VERSION"
-          echo "DMG will be named: $DMG_NAME"
-          
           # Find the original DMG and rename it
           ls builds
           DMG=$(find builds -name "SikhiToTheMax-*-arm64.dmg" | head -n 1)
@@ -139,39 +147,23 @@ jobs:
           fi
           echo "Found: $DMG"
           cp "$DMG" "$DMG_NAME"
-          
-          # Set output for other steps
-          echo "dmg_name=$DMG_NAME" >> $GITHUB_OUTPUT
 
       - name: Verify and Code sign .dmg Signature
         run: |
           source venv-gyp/bin/activate
-          VERSION=$(node -p "require('./package.json').version")
-          BRANCH=${GITHUB_REF_NAME}
-          
-          if [ "$BRANCH" = "dev" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}-alpha.dmg"
-          elif [ "$BRANCH" = "master" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}-beta.dmg"
-          elif [ "$BRANCH" = "release" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}.dmg"
-          else
-            DMG_FILE="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
-          fi
-
           echo "🔑 Listing all identities in the keychain..."
           security find-identity -p codesigning -v
           echo "🔑 Listing all keychains..."
           security list-keychains -d user
 
           echo "🔍 Verifying DMG signature..."
-          if ! codesign --verify --deep --strict "$DMG_FILE"; then
+          if ! codesign --verify --deep --strict "$DMG_NAME"; then
             echo "❌ DMG is not properly signed. Attempting to sign it now... $IDENTITY"
 
-            codesign --sign "$IDENTITY" --timestamp --options runtime "$DMG_FILE"
+            codesign --sign "$IDENTITY" --timestamp --options runtime "$DMG_NAME"
 
             echo "✅ Signing completed. Re-verifying..."
-            if codesign --verify --deep --strict "$DMG_FILE"; then
+            if codesign --verify --deep --strict "$DMG_NAME"; then
               echo "🎉 DMG has been successfully signed!"
             else
               echo "🚨 Failed to sign DMG properly. Please check codesigning identity and try again."
@@ -184,24 +176,11 @@ jobs:
       - name: Notarize DMG
         run: |
           source venv-gyp/bin/activate
-          VERSION=$(node -p "require('./package.json').version")
-          BRANCH=${GITHUB_REF_NAME}
-          
-          if [ "$BRANCH" = "dev" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}-alpha.dmg"
-          elif [ "$BRANCH" = "master" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}-beta.dmg"
-          elif [ "$BRANCH" = "release" ]; then
-            DMG_FILE="SikhiToTheMax-${VERSION}.dmg"
-          else
-            DMG_FILE="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
-          fi
-
-          echo "📦 Starting notarization process for $DMG_FILE..."
+          echo "📦 Starting notarization process for $DMG_NAME..."
 
           # Submit for notarization
           echo "Submitting to Apple notary service..."
-          xcrun notarytool submit "$DMG_FILE" \
+          xcrun notarytool submit "$DMG_NAME" \
             --apple-id "${{ secrets.APPLE_ID }}" \
             --password "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" \
             --team-id "${{ secrets.APPLE_TEAM_ID }}" \
@@ -209,11 +188,11 @@ jobs:
 
           # Staple the notarization ticket
           echo "Stapling notarization ticket..."
-          xcrun stapler staple "$DMG_FILE"
+          xcrun stapler staple "$DMG_NAME"
 
           # Verify the notarization
           echo "Verifying notarization..."
-          xcrun stapler validate "$DMG_FILE"
+          xcrun stapler validate "$DMG_NAME"
 
           if [ $? -eq 0 ]; then
             echo "✅ Notarization completed successfully!"
@@ -246,17 +225,10 @@ jobs:
             echo "$new_name"
           }
 
-          # Get the original filename and ensure it exists
-          original_name="${{ steps.dmg-name.outputs.dmg_name }}"
-          if [ ! -f "$original_name" ]; then
-            echo "Error: File $original_name does not exist"
-            exit 1
-          fi
-          
           # Get next available filename
-          new_name=$(get_next_filename "$original_name")
+          new_name=$(get_next_filename "$DMG_NAME")
           
-          echo "Original file: $original_name"
+          echo "Original file: $DMG_NAME"
           echo "Uploading as: $new_name"
           
           # Upload the DMG to Azure Storage using SAS token
@@ -264,7 +236,7 @@ jobs:
             --account-name "${{ secrets.AZURE_STORAGE_ACCOUNT }}" \
             --container-name "${{ secrets.AZURE_STORAGE_CONTAINER }}" \
             --name "macos/$new_name" \
-            --file "$original_name" \
+            --file "$DMG_NAME" \
             --sas-token "${{ secrets.SAS_TOKEN }}"
 
       - name: Cleanup build files
