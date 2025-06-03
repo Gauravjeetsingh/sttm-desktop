@@ -75,7 +75,7 @@ jobs:
             else
               echo "CSC_LINK is set and not empty"
               # Print first few characters to verify it's not just whitespace
-              echo "CSC_LINK starts with: ${CSC_LINK:0:9}..."
+              echo "CSC_LINK starts with: ${CSC_LINK:0:10}..."
             fi
 
             # download the certificate - handle URL encoding
