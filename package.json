@@ -162,12 +162,6 @@
       "buildResources": "assets",
       "output": "builds"
     },
-    "publish": {
-      "provider": "s3",
-      "bucket": "sttm-releases",
-      "path": "${os}-${arch}",
-      "region": "us-west-2"
-    },
     "dmg": {
       "icon": "STTM-DMG.icns"
     },

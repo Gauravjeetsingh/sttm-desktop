@@ -1,0 +1,205 @@
+version: 2.1
+
+executors:
+  macos-exec:
+    macos:
+      xcode: "15.4.0"
+    resource_class: macos.m1.medium.gen1
+    working_directory: ~/sttmd
+
+jobs:
+  build-mac:
+    executor: macos-exec
+    environment:
+      APPLE_TEAM_ID: "${APPLE_TEAM_ID}"
+    steps:
+      - checkout
+
+      - restore_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+
+      - run:
+          name: Ensure Python distutils support
+          command: |
+            # install setuptools (which brings back distutils)
+            brew install python-setuptools    # Homebrew formula for setuptools
+            python3 -m pip install --upgrade setuptools
+
+      - run:
+          name: Install Azure CLI
+          command: |
+            brew install azure-cli
+
+      - run:
+          name: Verify nvm Installation, Install Node.js v18, Build & Package macOS App
+          # run in a login shell so ~/.bash_profile / ~/.bashrc are loaded
+          command: |
+            if ! command -v nvm &> /dev/null; then
+              echo "nvm could not be found, installing..."
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            fi
+            # if NVM was installed in $HOME:
+            [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh"
+
+            nvm install v18.18.0
+            nvm use v18.18.0
+
+            npm install
+
+      - save_cache:
+          key: dependency-cache-{{ checksum "package.json" }}
+          paths:
+            - ./node_modules
+
+      - run:
+          name: Import Code Signing Certificate
+          environment:
+            KEY_CHAIN: "build.keychain"
+            CERTIFICATE_P12: "certificate.p12"
+          command: |
+            nvm use v18.18.0
+
+            # add team id to package.json
+            npm run prebuild
+
+            # download the certificate
+            curl -sSL "${CSC_LINK}" -o "${CERTIFICATE_P12}"
+            openssl pkcs12 -in ${CERTIFICATE_P12} -nodes -legacy -passin pass:"${CSC_KEY_PASSWORD}"
+
+            #create a keychain
+            security create-keychain -p "${CSC_KEY_PASSWORD}" "${KEY_CHAIN}"
+            security set-keychain-settings -t 3600 -l "${KEY_CHAIN}"
+            security list-keychains -d user -s "${KEY_CHAIN}"
+
+            # Make the keychain the default so identities are found
+            security default-keychain -d user -s "${KEY_CHAIN}"
+            
+            # Unlock the keychain
+            security unlock-keychain -p "${CSC_KEY_PASSWORD}" "${KEY_CHAIN}"
+
+            security import "${CERTIFICATE_P12}" -k "${KEY_CHAIN}" -P "${CSC_KEY_PASSWORD}" -T /usr/bin/codesign;
+
+            security set-key-partition-list -S apple-tool:,apple: -s -k "${CSC_KEY_PASSWORD}" "${KEY_CHAIN}"
+
+            npm run pack:macArm
+            rm -fr *.p12
+
+      - run:
+          name: Get version and set DMG name based on branch
+          command: |
+            set -e
+            VERSION=$(node -p "require('../package.json').version")
+            BRANCH=$(git rev-parse --abbrev-ref HEAD)
+            
+            if [ "$BRANCH" = "dev" ]; then
+              DMG_NAME="SikhiToTheMax-${VERSION}-alpha.dmg"
+            elif [ "$BRANCH" = "master" ]; then
+              DMG_NAME="SikhiToTheMax-${VERSION}-beta.dmg"
+            elif [ "$BRANCH" = "release" ]; then
+              DMG_NAME="SikhiToTheMax-${VERSION}.dmg"
+            else
+              DMG_NAME="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
+            fi
+            
+            echo "Building for branch: $BRANCH"
+            echo "Version: $VERSION"
+            echo "DMG will be named: $DMG_NAME"
+            
+            # Find the original DMG and rename it
+            ls builds
+            DMG=$(find builds -name "SikhiToTheMax-*-arm64.dmg" | head -n 1)
+            if [ -z "$DMG" ]; then
+              echo "DMG not found!"
+              exit 1
+            fi
+            echo "Found: $DMG"
+            cp "$DMG" "$DMG_NAME"
+
+      - run:
+          name: Verify and Code sign .dmg Signature
+          environment:
+            IDENTITY: "Developer ID Application: Khalis, Inc."
+          command: |
+            VERSION=$(node -p "require('../package.json').version")
+            BRANCH=$(git rev-parse --abbrev-ref HEAD)
+            
+            if [ "$BRANCH" = "dev" ]; then
+              DMG_FILE="SikhiToTheMax-${VERSION}-alpha.dmg"
+            elif [ "$BRANCH" = "master" ]; then
+              DMG_FILE="SikhiToTheMax-${VERSION}-beta.dmg"
+            elif [ "$BRANCH" = "release" ]; then
+              DMG_FILE="SikhiToTheMax-${VERSION}.dmg"
+            else
+              DMG_FILE="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
+            fi
+
+            echo "🔑 Listing all identities in the keychain..."
+            security find-identity -p codesigning -v
+            echo "🔑 Listing all keychains..."
+            security list-keychains -d user
+
+            echo "🔍 Verifying DMG signature..."
+            if ! codesign --verify --deep --strict "$DMG_FILE"; then
+              echo "❌ DMG is not properly signed. Attempting to sign it now... $IDENTITY"
+
+              codesign --sign "$IDENTITY" --timestamp --options runtime "$DMG_FILE"
+
+              echo "✅ Signing completed. Re-verifying..."
+              if codesign --verify --deep --strict "$DMG_FILE"; then
+                echo "🎉 DMG has been successfully signed!"
+              else
+                echo "🚨 Failed to sign DMG properly. Please check codesigning identity and try again."
+                exit 1
+              fi
+            else
+              echo "✅ DMG is already properly signed. No action needed."
+            fi
+
+      - run:
+          name: Upload to Azure Storage
+          command: |
+            VERSION=$(node -p "require('../package.json').version")
+            BRANCH=$(git rev-parse --abbrev-ref HEAD)
+            
+            if [ "$BRANCH" = "dev" ]; then
+              DMG_FILE="SikhiToTheMax-${VERSION}-alpha.dmg"
+            elif [ "$BRANCH" = "master" ]; then
+              DMG_FILE="SikhiToTheMax-${VERSION}-beta.dmg"
+            elif [ "$BRANCH" = "release" ]; then
+              DMG_FILE="SikhiToTheMax-${VERSION}.dmg"
+            else
+              DMG_FILE="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
+            fi
+
+            # Upload the DMG to Azure Storage using SAS token
+            az storage blob upload \
+              --account-name "${AZURE_STORAGE_ACCOUNT}" \
+              --container-name "${AZURE_STORAGE_CONTAINER}" \
+              --name "macos/${DMG_FILE}" \
+              --file "${DMG_FILE}" \
+              --sas-token "${SAS_TOKEN}"
+      
+      - run:
+          name: Cleanup all build files
+          command: |
+            ls builds
+            echo "Cleaning up build leftovers..."
+            rm -rf builds
+      
+      - store_artifacts:
+          path: SikhiToTheMax-*.dmg
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build-mac:
+          filters:
+            branches:
+              only:
+                - dev
+                - master
+                - release
+                - circleci-gaurav
