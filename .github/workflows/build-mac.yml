@@ -181,6 +181,47 @@ jobs:
             echo "✅ DMG is already properly signed. No action needed."
           fi
 
+      - name: Notarize DMG
+        run: |
+          source venv-gyp/bin/activate
+          VERSION=$(node -p "require('./package.json').version")
+          BRANCH=${GITHUB_REF_NAME}
+          
+          if [ "$BRANCH" = "dev" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}-alpha.dmg"
+          elif [ "$BRANCH" = "master" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}-beta.dmg"
+          elif [ "$BRANCH" = "release" ]; then
+            DMG_FILE="SikhiToTheMax-${VERSION}.dmg"
+          else
+            DMG_FILE="SikhiToTheMax-${VERSION}-${BRANCH}.dmg"
+          fi
+
+          echo "📦 Starting notarization process for $DMG_FILE..."
+
+          # Submit for notarization
+          echo "Submitting to Apple notary service..."
+          xcrun notarytool submit "$DMG_FILE" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --password "${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" \
+            --team-id "${{ secrets.APPLE_TEAM_ID }}" \
+            --wait
+
+          # Staple the notarization ticket
+          echo "Stapling notarization ticket..."
+          xcrun stapler staple "$DMG_FILE"
+
+          # Verify the notarization
+          echo "Verifying notarization..."
+          xcrun stapler validate "$DMG_FILE"
+
+          if [ $? -eq 0 ]; then
+            echo "✅ Notarization completed successfully!"
+          else
+            echo "❌ Notarization verification failed!"
+            exit 1
+          fi
+
       - name: Upload to Azure Storage
         run: |
           source venv-gyp/bin/activate
