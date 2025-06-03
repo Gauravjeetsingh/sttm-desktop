@@ -15,6 +15,7 @@ jobs:
       KEY_CHAIN: build.keychain
       CERTIFICATE_P12: certificate.p12
       IDENTITY: "Developer ID Application: Khalis, Inc."
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
