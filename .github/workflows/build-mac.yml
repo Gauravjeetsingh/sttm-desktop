@@ -246,12 +246,17 @@ jobs:
             echo "$new_name"
           }
 
-          # Get the original filename
+          # Get the original filename and ensure it exists
           original_name="${{ steps.dmg-name.outputs.dmg_name }}"
+          if [ ! -f "$original_name" ]; then
+            echo "Error: File $original_name does not exist"
+            exit 1
+          fi
           
           # Get next available filename
           new_name=$(get_next_filename "$original_name")
           
+          echo "Original file: $original_name"
           echo "Uploading as: $new_name"
           
           # Upload the DMG to Azure Storage using SAS token
@@ -259,7 +264,7 @@ jobs:
             --account-name "${{ secrets.AZURE_STORAGE_ACCOUNT }}" \
             --container-name "${{ secrets.AZURE_STORAGE_CONTAINER }}" \
             --name "macos/$new_name" \
-            --file "${{ steps.dmg-name.outputs.dmg_name }}" \
+            --file "$original_name" \
             --sas-token "${{ secrets.SAS_TOKEN }}"
 
       - name: Cleanup build files
