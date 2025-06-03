@@ -11,7 +11,9 @@ jobs:
   build-mac:
     executor: macos-exec
     environment:
-      APPLE_TEAM_ID: "${APPLE_TEAM_ID}"
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - checkout
 
