@@ -12,6 +12,7 @@ const PRERELEASE_TRACKS = {
   dev: 'alpha',
   master: 'beta',
   'experimental-release': 'experimental',
+  'data-collection': 'data-collection',
 };
 
 module.exports = (branch, lastTag) => {
@@ -45,8 +46,8 @@ module.exports = (branch, lastTag) => {
       throw new Error('Release cannot be older than previous version');
     }
 
-    // The experimental track's name and icons are set by the release script
-    if (track !== 'experimental') {
+    // The experimental and data-collection tracks' names and icons are set by the release script
+    if (track !== 'experimental' && track !== 'data-collection') {
       packageJSON.version = currentRelease;
       packageJSON.productName = `${packageJSON.productName} ${track
         .charAt(0)

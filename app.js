@@ -611,8 +611,8 @@ function sendToViewerWindows(channel, ...args) {
 }
 
 function showChangelog() {
-  // Experimental builds don't have changelog entries of their own
-  if (appVersion.includes('experimental')) {
+  // Experimental and data-collection builds don't have changelog entries of their own
+  if (appVersion.includes('experimental') || appVersion.includes('data-collection')) {
     return false;
   }
 

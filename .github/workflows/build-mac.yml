@@ -7,15 +7,16 @@ on:
       - master
       - release
       - experimental-release
+      - data-collection
 
 jobs:
   build-mac:
     strategy:
       matrix:
         arch: [x64, arm64]
-        # Experimental releases only ship the Apple Silicon build
+        # Experimental and data-collection releases only ship the Apple Silicon build
         exclude:
-          - arch: ${{ github.ref_name == 'experimental-release' && 'x64' || '' }}
+          - arch: ${{ (github.ref_name == 'experimental-release' || github.ref_name == 'data-collection') && 'x64' || '' }}
     runs-on: ${{ matrix.arch == 'arm64' && 'macos-14' || 'macos-15-intel' }}
     env:
       KEY_CHAIN: build.keychain

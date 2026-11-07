@@ -19,6 +19,7 @@ const release = async () => {
   else if (branch === 'master') track = 'beta';
   else if (branch === 'release') track = '';
   else if (branch === 'experimental-release') track = 'experimental';
+  else if (branch === 'data-collection') track = 'data-collection';
   else track = branch;
 
   console.log(`Platform: ${platform}`);
@@ -56,24 +57,30 @@ const release = async () => {
     const iconTrack = fs.existsSync(path.join(__dirname, '..', 'assets', `STTM-${track}.icns`))
       ? track
       : 'alpha';
-    pkg.productName = `${pkg.productName} ${track.charAt(0).toUpperCase()}${track.slice(1)}`;
+    // e.g. "data-collection" -> "Data Collection"
+    const trackName = track
+      .split('-')
+      .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+      .join(' ');
+    pkg.productName = `${pkg.productName} ${trackName}`;
     pkg.build.mac.icon = `assets/STTM-${iconTrack}.icns`;
     pkg.build.win.icon = `assets/STTM-${iconTrack}.ico`;
   } else {
     pkg.build.mac.icon = 'assets/STTM.icns';
     pkg.build.win.icon = 'assets/STTM.ico';
   }
-  // Experimental builds get their own identity so they install alongside the stable app
-  // (separate bundle id / Windows install entry, and a separate updater cache dir)
-  if (track === 'experimental') {
-    pkg.name = `${pkg.name}-experimental`;
-    pkg.build.appId = `${pkg.build.appId}.experimental`;
+  // Experimental and data-collection builds get their own identity so they install alongside the
+  // stable app (separate bundle id / Windows install entry, and a separate updater cache dir)
+  const hasOwnIdentity = track === 'experimental' || track === 'data-collection';
+  if (hasOwnIdentity) {
+    pkg.name = `${pkg.name}-${track}`;
+    pkg.build.appId = `${pkg.build.appId}.${track}`;
   }
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
 
   // macArm builds use their own electron-builder config, so keep its icon (and appId) in sync
   let macArmConfig = originalMacArmConfig.replace(/icon: ".*"/, `icon: "${pkg.build.mac.icon}"`);
-  if (track === 'experimental') {
+  if (hasOwnIdentity) {
     macArmConfig = `appId: ${pkg.build.appId}\n${macArmConfig}`;
   }
   fs.writeFileSync(macArmConfigPath, macArmConfig);
@@ -118,6 +125,7 @@ if (
   branch === 'master' ||
   branch === 'dev' ||
   branch === 'experimental-release' ||
+  branch === 'data-collection' ||
   branch === 'github-action'
 ) {
   release();

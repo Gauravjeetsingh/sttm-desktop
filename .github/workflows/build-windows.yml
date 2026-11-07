@@ -7,6 +7,7 @@ on:
       - master
       - release
       - experimental-release
+      - data-collection
 
 jobs:
   build-windows:
@@ -15,9 +16,9 @@ jobs:
     strategy:
       matrix:
         arch: [x64, ia32]
-        # Experimental releases only ship the 64-bit build
+        # Experimental and data-collection releases only ship the 64-bit build
         exclude:
-          - arch: ${{ github.ref_name == 'experimental-release' && 'ia32' || '' }}
+          - arch: ${{ (github.ref_name == 'experimental-release' || github.ref_name == 'data-collection') && 'ia32' || '' }}
     env:
       BONJOUR_SDK_HOME: 'C:\\Program Files\\Bonjour SDK'
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
